@@ -498,7 +498,7 @@ Resources:
             PayloadFormatVersion: '1.0'
       Environment: 
         Variables:
-          S3_BUCKET: mailo.images
+          S3_BUCKET: 
           UNSPLASH_APPLICATION_ID: 
           UNSPLASH_SECRET: 
           PEXELS_API_KEY:
@@ -535,7 +535,7 @@ Resources:
       Environment: 
         Variables:
           S3_BUCKET: 
-          
+
   CreateCreativeSegmentFunction:
     Type: AWS::Serverless::Function
     Properties:

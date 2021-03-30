@@ -1,0 +1,79 @@
+---
+- name: Install necessary apt packages
+  hosts: test
+  tasks: 
+    - name: Install git and Midnight Commander
+      apt:
+        name:
+          - git
+          - mc
+        state: present
+        update_cache: true
+      become: true
+
+# install .NET packages and add Entity Framework
+    - name: Download MS product repository
+      get_url:
+        url: https://packages.microsoft.com/config/ubuntu/20.04/packages-microsoft-prod.deb
+        dest: /tmp/packages-microsoft-prod.deb
+
+    - name: Install MS product repository
+      apt: deb=/tmp/packages-microsoft-prod.deb
+      become: true
+
+    - name: Make sure HTTPS is supported by apt
+      apt:
+        name: apt-transport-https
+        state: present
+        update_cache: no
+      become: true
+
+    - name: Install .NET Core SDK
+      apt:
+        name: dotnet-sdk-3.1
+        state: present
+        update_cache: yes
+      become: true
+      
+    - name: Install .NET Entity Framework 
+      shell: dotnet tool install --global dotnet-ef
+      become: true
+      ignore_errors: true
+
+#Install Docker on remote host
+    - name: Install aptitude using apt
+      become: true
+      apt: name=aptitude state=latest update_cache=yes force_apt_get=yes
+
+    - name: Install required system packages
+      become: true    
+      apt: name={{ item }} state=latest update_cache=yes
+      loop: [ 'apt-transport-https', 'ca-certificates', 'curl', 'software-properties-common', 'python3-pip', 'virtualenv', 'python3-setuptools' ]
+
+    - name: Add Docker GPG apt Key
+      become: true    
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker Repository
+      become: true    
+      apt_repository:
+        repo: deb https://download.docker.com/linux/ubuntu bionic stable
+        state: present
+
+    - name: Update apt and install docker-ce
+      become: true    
+      apt: update_cache=yes name=docker-ce state=latest
+
+    - name: Install Docker Module for Python
+      become: true    
+      pip:
+        name: docker
+
+    - name: Install docker-compose 1.25.*
+      apt:
+        name: docker-compose=1.25.*
+        state: present
+        update_cache: yes    
+      become: true  

@@ -1,0 +1,21 @@
+---
+- name: insert env files
+  hosts: test
+  become: true
+  vars_files: ./vars/os_environments.yml
+  tasks:
+  
+    # - name: Copy .env File to linux Path
+    #   copy:
+    #     src: /etc/ansible/vars/.env
+    #     dest: /usr/bin
+    #     owner: ubuntu
+    #     group: ubuntu
+    #     mode: 0664
+    - name: populate /etc/envirinment
+      lineinfile:
+        dest: "/etc/environment"
+        state: present
+        regexp: "^{{ item.key }}="
+        line: "{{ item.key }}={{ item.value }}"
+      with_items: "{{ os_environment }}"

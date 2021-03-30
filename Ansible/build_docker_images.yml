@@ -1,0 +1,98 @@
+---
+- name: Build images and run docker containers
+  hosts: test
+  become: true
+  vars_files: ./vars/main.yml
+  tasks:
+
+    - name: Add user to docker group
+      user:
+        name: ubuntu
+        groups: docker,sudo
+        append: yes
+
+    - name: Build dashboardapp image
+      command: chdir=/home/ubuntu/my_repo docker build -t  -f  .
+      become: true
+
+    - name: Build worker image
+      command: chdir=/home/ubuntu/my_repo docker build -t  -f  .
+      become: true      
+
+    # - name: Add network for containers
+    #   docker_network:
+    #     name: 
+    #     state: present
+    #     appends: yes
+        # connected: 
+        #   - dashboardapp
+        #   - worker
+        #   - keycloak
+
+    - name: Running Keycloak container
+      docker_container:
+        name: keycloak
+        image: jboss/keycloak:12.0.4
+        state: started
+        restart_policy: always
+        # network_mode: vitagis
+        ports:
+          - 
+          - 
+        env:
+          DB_ADDR: 
+          DB_DATABASE: 
+          DB_USER: 
+          DB_PASSWORD: 
+          JDBC_PARAMS: 
+          DB_VENDOR: 
+          KEYCLOAK_HOSTNAME: 
+          KEYCLOAK_HTTP_PORT: "80"
+          KEYCLOAK_USER:
+          KEYCLOAK_PASSWORD: ""
+          PROXY_ADDRESS_FORWARDING: "true"
+          KEYCLOAK_WELCOME_THEME: ""
+        command: -Dkeycloak.profile.feature.upload_scripts=enabled  
+        volumes:
+          - ~/
+          - ~
+
+    - name: Runing dashboardapp container
+      docker_container:
+        name: dashboardapp
+        image: 
+        state: started
+        # network_mode: vitagis
+        ports:
+          - 
+        env:
+          ASPNETCORE_ENVIRONMENT: 
+          ASPNETCORE_URLS: 
+          ASPNETCORE_FORWARDEDHEADERS_ENABLED: 
+          TRANDER_DB_SERVER: 
+          TRANDER_DB_NAME: 
+          TRANDER_DB_USER: 
+          TRANDER_DB_PASSWORD: 
+          TRANDER_DB_MARS: 
+
+#          ASPNETCORE_Kestrel__Certificates__Default__Password: ""
+#          ASPNETCORE_Kestrel__Certificates__Default__Path: ""
+# TODO add env vars for letsencrypt container
+          #VIRTUAL_HOST: 
+          #LETSENCRYPT_HOST: 
+          #LETSENCRYPT_EMAIL: 
+        # volumes:
+        #   - 
+
+    - name: Runing worker container
+      docker_container:
+        name: worker
+        image: 
+        state: started
+        # network_mode: vitagis        
+        env:
+          DOTNET_ENVIRONMENT: 
+
+    - name: Check if container is running
+      shell: docker ps
+      become: true

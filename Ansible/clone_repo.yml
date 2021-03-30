@@ -1,0 +1,61 @@
+---
+- name: Clone Vitagis.life Gitlab repository
+  hosts: test
+  become: true
+  vars_files: ./vars/main.yml
+  tasks:
+    - name: Make sure deployer user has ssh key
+      user:
+        name: '{{ deployer_user }}'
+        generate_ssh_key: yes
+
+    - name: "Check if GitLab has this user's SSH key"
+      uri:
+        url: "{{ deployer_gitlab_api }}/user/keys"
+        method: GET
+        status_code: [200]
+        headers:
+          private-token: "{{ deployer_gitlab_token }}"
+          Content-Type: "application/json"
+      register: user_ssh_keys
+
+    - name: Assign ssh key to a variable
+      shell:
+        cat /home/{{ deployer_user }}/{{ deployer_user_ssh_key_file }}.pub
+      register: deployer_user_public_key
+      when: not user_ssh_keys.json | selectattr('title', 'equalto', deployer_gitlab_key_title) | list | length > 0
+
+    - name: Push the generated ssh key to the GitLab instance
+      uri:
+        url: "{{ deployer_gitlab_api }}/user/keys"
+        method: POST
+        status_code: [201, 400]
+        headers:
+          private-token: "{{ deployer_gitlab_token }}"
+          Content-Type: "application/json"
+        body: >
+          {
+            "title": "{{ deployer_gitlab_key_title }}", 
+            "key": "{{ deployer_user_public_key.stdout_lines.0 }}"
+          }
+        body_format: json
+      when: not user_ssh_keys.json | selectattr('title', 'equalto', deployer_gitlab_key_title) | list | length > 0
+
+    - name: Ensure .ssh/config file exists
+      file: state=touch path="/home/{{ deployer_user }}/.ssh/config"
+      when: not user_ssh_keys.json | selectattr('title', 'equalto', deployer_gitlab_key_title) | list | length > 0
+
+    - name: Disable host key checking
+      lineinfile: dest=/home/{{ deployer_user }}/.ssh/config line='Host *\n \tStrictHostKeyChecking no\n\tUserKnownHostsFile=/dev/null'
+      when: not user_ssh_keys.json | selectattr('title', 'equalto', deployer_gitlab_key_title) | list | length > 0
+
+    - name: Add deploy group to sudoers file and validate
+      lineinfile: dest=/etc/sudoers state=present regexp='^%{{ deployer_group }}' line='%{{ deployer_group }} ALL=(ALL) NOPASSWD:ALL' validate="visudo -cf %s"
+
+    - name: Checkout source code
+      git: 
+        repo: ""
+        dest: /home/{{ deployer_user }}/my_repo
+        version: 
+        key_file: /home/{{ deployer_user }}/.ssh/id_rsa
+        accept_hostkey: true
