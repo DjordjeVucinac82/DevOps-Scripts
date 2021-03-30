@@ -1,0 +1,795 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  
+
+  SAM Template for  Platform
+  
+Globals:
+  Function:
+    Timeout: 3
+
+Parameters:
+  DBName:
+    Default: 
+    Description: The Database name
+    Type: String
+    MinLength: 4
+    MaxLength: 64
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
+
+  DBUser:
+    Default: 
+    NoEcho: true
+    Description: The database admin account username
+    Type: String
+    MinLength: 4
+    MaxLength: 16
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
+
+  DBPassword:
+    Default: 
+    NoEcho: true
+    Description: The database admin account password
+    Type: String
+    MinLength: 8
+    MaxLength: 41
+    AllowedPattern: '[a-zA-Z0-9]+'
+    ConstraintDescription: must contain only alphanumeric characters.
+  
+  DBProtocol:
+    Default: 
+    Description: DB protocol for connection string
+    Type: String
+
+  DBAllocatedStorage:
+    Default: 
+    Description: The size of the database (Gb)
+    Type: Number
+    MinValue: 5
+    MaxValue: 20
+    ConstraintDescription: must be between 5 and 20 Gb.
+
+  DBInstanceClass:
+    Description: The database instance type
+    Type: String
+    Default: 
+    AllowedValues: [db.t1.micro, db.m1.small, db.m1.medium, db.m1.large, 
+      db.t2.micro, db.t2.small, db.t2.medium, db.t2.large, db.t2.xlarge, 
+      db.t3.small, db.t3.medium, db.t3.large]
+    ConstraintDescription: must select a valid database instance type.
+
+  EC2SecurityGroup:
+    Description: The EC2 security group that contains instances that need access to the database
+    Default:
+    Type: String
+    AllowedPattern: '[a-zA-Z0-9\-]+'
+    ConstraintDescription: must be a valid security group name.      
+
+  MultiAZ:
+    Description: Multi-Availability Zone master database
+    Type: String
+    Default:
+    AllowedValues: ['true', 'false']
+    ConstraintDescription: must be true or false.
+
+  ApiName:  
+    Type: String
+    Default: 
+
+  StageName:
+    Type: String
+    Default:
+
+  Auth0Audience:
+    Type: String
+    Default: 
+  
+  Auth0JWKSURI:
+    Type: String
+    Default:
+
+  Auth0TokenIssuer:
+    Type: String
+    Default: 
+
+  Auth0AppClientId:
+    Type: String
+    Default: 
+
+  Auth0AppClientSecret:
+    Type: String
+    Default: 
+       
+  Auth0Domain:
+    Type: String
+    Default:
+           
+  Auth0ManagementAudience:
+    Type: String
+    Default:
+           
+  Auth0ManagementClientId:
+    Type: String
+    Default:
+           
+  Auth0ManagementClientSecret:   
+    Type: String
+    Default: 
+         
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: 
+        - Key: CFStack
+          Value:
+
+  SubnetAPublic:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: ""
+      Tags:
+        - Key: Name
+          Value: 
+        - Key: CFStack
+          Value: 
+
+  SubnetBPrivate:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: ""
+      Tags:
+        - Key: Name
+          Value: 
+        - Key: CFStack
+          Value:
+
+  SubnetCPrivate:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.3.0/24
+      AvailabilityZone: ""
+      Tags:
+        - Key: Name
+          Value: 
+        - Key: CFStack
+          Value:           
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    DependsOn: VPC
+    Properties:
+      Tags:
+        - Key: CFStack
+          Value: 
+        - Key: Name
+          Value: 
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+      
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: 
+        - Key: CFStack
+          Value: 
+
+  PublicRoute1:             
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: 
+        - Key: CFStack
+          Value: 
+          
+  PrivateRoute1:                   
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway
+
+  NATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt ElasticIPAddress.AllocationId
+      SubnetId: !Ref SubnetAPublic
+      Tags:
+        - Key: Name
+          Value: 
+        - Key: CFStack
+          Value: 
+
+  ElasticIPAddress:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: VPC
+      Tags:
+        - Key: CFStack
+          Value: 
+
+  SubnetAPublicRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SubnetAPublic
+      RouteTableId: !Ref PublicRouteTable
+
+  SubnetBPrivateRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SubnetBPrivate
+      RouteTableId: !Ref PrivateRouteTable
+
+  SubnetCPrivateRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SubnetCPrivate
+      RouteTableId: !Ref PrivateRouteTable 
+    
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable database access for application
+      VpcId: !Ref VPC
+      Tags: 
+        - Key: CFStack
+          Value: 
+      SecurityGroupIngress:
+        - IpProtocol: -1
+          FromPort: 1
+          ToPort: 65535
+          SourceSecurityGroupId: !Ref PrivateSG
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          SourceSecurityGroupId: !Ref PrivateSG
+
+  PrivateSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties: 
+      GroupDescription: Private subnets
+      VpcId: !Ref VPC
+      Tags: 
+        - Key: CFStack
+          Value: 
+      SecurityGroupIngress: 
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: udp
+          FromPort: 1194
+          ToPort: 1194
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 0.0.0.0/0          
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: For Launching RDS
+      DBSubnetGroupName: db-subnet-group
+      SubnetIds: 
+        - !Ref SubnetBPrivate
+        - !Ref SubnetCPrivate
+      Tags: 
+        - Key: CFStack
+          Value: 
+
+  MyDB:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBName: !Ref DBName
+      AllocatedStorage: !Ref DBAllocatedStorage
+      DBInstanceClass: !Ref DBInstanceClass
+      Engine: postgres
+      EngineVersion: 11.4
+      MasterUsername: !Ref DBUser
+      MasterUserPassword: !Ref DBPassword
+      MultiAZ: !Ref MultiAZ
+      PubliclyAccessible: false
+      Port: 5432
+      VPCSecurityGroups: 
+        - !Ref SecurityGroup
+        - !Ref PrivateSG
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      Tags:
+        - Key: CFStack
+          Value: 
+        - Key: Name
+          Value: 
+
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName:
+        Ref: StageName
+      Tags:
+        Tag: Value
+      AccessLogSettings:
+        DestinationArn:
+          Fn::GetAtt:
+          - AccessLogs
+          - Arn
+        Format: $context.requestId
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 200
+      StageVariables:
+        StageVar: Value
+      FailOnWarnings: true
+      CorsConfiguration: 
+        AllowOrigins:
+          - ""
+          - ""
+        AllowHeaders:
+          - Authorization
+          - Content-Type
+          - x-apigateway-header
+        AllowMethods:
+          - POST
+          - GET
+          - PUT 
+          - DELETE
+          - OPTIONS
+        AllowCredentials: True  
+      Auth:
+        Authorizers:
+          OAuth2Authorizer:
+            JwtConfiguration:
+              issuer: !Ref Auth0TokenIssuer
+              audience:
+                - !Ref Auth0Audience
+            IdentitySource: "$request.header.Authorization"
+        DefaultAuthorizer: OAuth2Authorizer
+
+  AccessLogs:
+    Type: AWS::Logs::LogGroup            
+
+# lambda functions
+  Mjml2htmlFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: mjml2html/
+      Handler: mjml2html.lambdaHandler
+      Runtime: nodejs12.x
+      MemorySize: 512
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - AWSLambdaBasicExecutionRole
+      VpcConfig: 
+        SecurityGroupIds: 
+          - !Ref SecurityGroup
+        SubnetIds: 
+          - !Ref SubnetBPrivate 
+          - !Ref SubnetCPrivate
+      Events:
+        ExplicitApi:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: HttpApi
+            Auth:
+              Authorizer: OAuth2Authorizer
+            Method: POST
+            Path: /mjml2html
+            TimeoutInMillis: 15000
+            PayloadFormatVersion: '1.0'        
+      Environment: 
+        Variables:
+          DB_PROTOCOL: !Ref DBProtocol
+          DB_USER: !Ref DBUser
+          DB_PASSWORD: !Ref DBPassword
+          DB_HOSTNAME: !GetAtt MyDB.Endpoint.Address
+          DB_PORT: !GetAtt MyDB.Endpoint.Port
+          DB_SCHEMA: !Ref DBName
+          S3_BUCKET: html.storage
+
+  GetHtmlFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: getHtml/
+      Handler: getHtml.lambdaHandler
+      Runtime: nodejs12.x
+      MemorySize: 512
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - AWSLambdaBasicExecutionRole
+      VpcConfig: 
+        SecurityGroupIds: 
+          - !Ref SecurityGroup
+        SubnetIds: 
+          - !Ref SubnetBPrivate 
+          - !Ref SubnetCPrivate
+      Events:
+        ExplicitApi:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: HttpApi
+            Auth:
+              Authorizer: OAuth2Authorizer
+            Method: GET
+            Path: /getHtml
+            TimeoutInMillis: 15000
+            PayloadFormatVersion: '1.0'    
+      Environment: 
+        Variables:
+          DB_PROTOCOL: !Ref DBProtocol
+          DB_USER: !Ref DBUser
+          DB_PASSWORD: !Ref DBPassword
+          DB_HOSTNAME: !GetAtt MyDB.Endpoint.Address
+          DB_PORT: !GetAtt MyDB.Endpoint.Port
+          DB_SCHEMA: !Ref DBName
+          S3_BUCKET: html.storage
+                  
+  SaveExternalImageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: save-external-image/
+      Handler: save-external-image.lambdaHandler
+      Runtime: nodejs12.x
+      MemorySize: 1024
+      Timeout: 15
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - AmazonS3FullAccess
+        - AWSLambdaBasicExecutionRole
+      VpcConfig: 
+        SecurityGroupIds: 
+          - !Ref SecurityGroup
+        SubnetIds: 
+          - !Ref SubnetBPrivate 
+          - !Ref SubnetCPrivate
+      Events:
+        ExplicitApi:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Auth:
+              Authorizer: OAuth2Authorizer
+            Method: POST
+            Path: /saveExternalImage
+            TimeoutInMillis: 15000
+            PayloadFormatVersion: '1.0'
+      Environment: 
+        Variables:
+          S3_BUCKET: mailo.images
+          UNSPLASH_APPLICATION_ID: 
+          UNSPLASH_SECRET: 
+          PEXELS_API_KEY:
+
+  SaveUploadedImageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: save-uploaded-image/
+      Handler: save-uploaded-image.lambdaHandler
+      Runtime: nodejs12.x
+      MemorySize: 1024
+      Timeout: 15
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - AmazonS3FullAccess
+        - AWSLambdaBasicExecutionRole
+      VpcConfig: 
+        SecurityGroupIds: 
+          - !Ref SecurityGroup
+        SubnetIds: 
+          - !Ref SubnetBPrivate 
+          - !Ref SubnetCPrivate
+      Events:
+        ExplicitApi:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Auth:
+              Authorizer: OAuth2Authorizer
+            Method: POST
+            Path: /saveUploadedImage
+            TimeoutInMillis: 15000
+            PayloadFormatVersion: '1.0'          
+      Environment: 
+        Variables:
+          S3_BUCKET: 
+          
+  CreateCreativeSegmentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: create-creative-segment/
+      Handler: app.createCreativeSegment
+      Runtime: nodejs12.x
+      MemorySize: 512
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - AWSLambdaBasicExecutionRole
+      VpcConfig: 
+        SecurityGroupIds: 
+          - !Ref SecurityGroup
+        SubnetIds: 
+          - !Ref SubnetBPrivate 
+          - !Ref SubnetCPrivate
+      Events:
+        ExplicitApi:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: HttpApi
+            Auth:
+              Authorizer: OAuth2Authorizer
+            Method: POST
+            Path: /creativeSegment
+            TimeoutInMillis: 15000
+            PayloadFormatVersion: '1.0'   
+      Environment: 
+        Variables:
+          DB_PROTOCOL: !Ref DBProtocol
+          DB_USER: !Ref DBUser
+          DB_PASSWORD: !Ref DBPassword
+          DB_HOSTNAME: !GetAtt MyDB.Endpoint.Address
+          DB_PORT: !GetAtt MyDB.Endpoint.Port
+          DB_SCHEMA: !Ref DBName
+
+  Auth0MeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: auth0-me/
+      Handler: index.lambdaHandler
+      Runtime: nodejs12.x
+      MemorySize: 512
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - AWSLambdaBasicExecutionRole
+      VpcConfig: 
+        SecurityGroupIds: 
+          - !Ref SecurityGroup
+        SubnetIds: 
+          - !Ref SubnetBPrivate 
+          - !Ref SubnetCPrivate
+      Events:
+        ExplicitApi:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: HttpApi
+            Auth:
+              Authorizer: OAuth2Authorizer
+            Method: POST
+            Path: /me
+            TimeoutInMillis: 15000
+            PayloadFormatVersion: '1.0'
+      Environment: 
+        Variables:
+          AUTH0_APP_AUDIENCE: !Ref Auth0Audience 
+          AUTH0_APP_CLIENT_ID: !Ref Auth0AppClientId
+          AUTH0_APP_CLIENT_SECRET: !Ref Auth0AppClientSecret
+          AUTH0_DOMAIN: !Ref Auth0Domain
+          AUTH0_MANAGEMENT_AUDIENCE: !Ref Auth0ManagementAudience
+          AUTH0_MANAGEMENT_CLIENT_ID: !Ref Auth0ManagementClientId
+          AUTH0_MANAGEMENT_CLIENT_SECRET: !Ref Auth0ManagementClientSecret
+  
+  Auth0UserSettings:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: auth0-user-settings/
+      Handler: index.lambdaHandler
+      Runtime: nodejs12.x
+      MemorySize: 512
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - AWSLambdaBasicExecutionRole
+      VpcConfig: 
+        SecurityGroupIds: 
+          - !Ref SecurityGroup
+        SubnetIds: 
+          - !Ref SubnetBPrivate 
+          - !Ref SubnetCPrivate
+      Events:
+        ExplicitApi:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: HttpApi
+            Auth:
+              Authorizer: OAuth2Authorizer
+            Method: POST
+            Path: /settings
+            TimeoutInMillis: 15000
+            PayloadFormatVersion: '1.0'
+      Environment: 
+        Variables:
+          AUTH0_DOMAIN: !Ref Auth0Domain
+          AUTH0_MANAGEMENT_AUDIENCE: !Ref Auth0ManagementAudience
+          AUTH0_MANAGEMENT_CLIENT_ID: !Ref Auth0ManagementClientId
+          AUTH0_MANAGEMENT_CLIENT_SECRET: !Ref Auth0ManagementClientSecret
+
+  DuplicateCreativeSegmentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: duplicate-email/
+      Handler: app.duplicateEmail
+      Runtime: nodejs12.x
+      MemorySize: 512
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - AWSLambdaBasicExecutionRole
+      VpcConfig: 
+        SecurityGroupIds: 
+          - !Ref SecurityGroup
+        SubnetIds: 
+          - !Ref SubnetBPrivate 
+          - !Ref SubnetCPrivate
+      Events:
+        ExplicitApi:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: HttpApi
+            Auth:
+              Authorizer: OAuth2Authorizer
+            Method: GET
+            Path: /creativeSegment/duplicate
+            TimeoutInMillis: 15000
+            PayloadFormatVersion: '1.0' 
+      Environment: 
+        Variables:
+          DB_PROTOCOL: !Ref DBProtocol
+          DB_USER: !Ref DBUser
+          DB_PASSWORD: !Ref DBPassword
+          DB_HOSTNAME: !GetAtt MyDB.Endpoint.Address
+          DB_PORT: !GetAtt MyDB.Endpoint.Port
+          DB_SCHEMA: !Ref DBName       
+
+  GetCreativeSegmentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: get-creative-segment/
+      Handler: app.getCreativeSegment
+      Runtime: nodejs12.x
+      MemorySize: 512
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - AWSLambdaBasicExecutionRole
+      VpcConfig: 
+        SecurityGroupIds: 
+          - !Ref SecurityGroup
+        SubnetIds: 
+          - !Ref SubnetBPrivate 
+          - !Ref SubnetCPrivate
+      Events:
+        ExplicitApi:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: HttpApi
+            Auth:
+              Authorizer: OAuth2Authorizer
+            Method: GET
+            Path: /creativeSegment
+            TimeoutInMillis: 15000
+            PayloadFormatVersion: '1.0'
+      Environment: 
+        Variables:
+          DB_PROTOCOL: !Ref DBProtocol
+          DB_USER: !Ref DBUser
+          DB_PASSWORD: !Ref DBPassword
+          DB_HOSTNAME: !GetAtt MyDB.Endpoint.Address
+          DB_PORT: !GetAtt MyDB.Endpoint.Port
+          DB_SCHEMA: !Ref DBName
+
+  UpdateCreativeSegmentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: update-creative-segment/
+      Handler: app.updateCreativeSegment
+      Runtime: nodejs12.x
+      MemorySize: 512
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - AWSLambdaBasicExecutionRole
+      VpcConfig: 
+        SecurityGroupIds: 
+          - !Ref SecurityGroup
+        SubnetIds: 
+          - !Ref SubnetBPrivate 
+          - !Ref SubnetCPrivate
+      Events:
+        ExplicitApi:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: HttpApi
+            Auth:
+              Authorizer: OAuth2Authorizer
+            Method: PUT
+            Path: /creativeSegment
+            TimeoutInMillis: 15000
+            PayloadFormatVersion: '1.0'
+      Environment: 
+        Variables:
+          DB_PROTOCOL: !Ref DBProtocol
+          DB_USER: !Ref DBUser
+          DB_PASSWORD: !Ref DBPassword
+          DB_HOSTNAME: !GetAtt MyDB.Endpoint.Address
+          DB_PORT: !GetAtt MyDB.Endpoint.Port
+          DB_SCHEMA: !Ref DBName
+
+  DeleteCreativeSegmentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: delete-creative-segment/
+      Handler: app.deleteCreativeSegment
+      Runtime: nodejs12.x
+      MemorySize: 512
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - AWSLambdaBasicExecutionRole
+      VpcConfig: 
+        SecurityGroupIds: 
+          - !Ref SecurityGroup
+        SubnetIds: 
+          - !Ref SubnetBPrivate 
+          - !Ref SubnetCPrivate
+      Events:
+        ExplicitApi:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: HttpApi
+            Auth:
+              Authorizer: OAuth2Authorizer
+            Method: DELETE
+            Path: /creativeSegment
+            TimeoutInMillis: 15000
+            PayloadFormatVersion: '1.0'
+      Environment: 
+        Variables:
+          DB_PROTOCOL: !Ref DBProtocol
+          DB_USER: !Ref DBUser
+          DB_PASSWORD: !Ref DBPassword
+          DB_HOSTNAME: !GetAtt MyDB.Endpoint.Address
+          DB_PORT: !GetAtt MyDB.Endpoint.Port
+          DB_SCHEMA: !Ref DBName

@@ -1,0 +1,329 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation template for ECS Fargate 
+              - .
+
+Parameters:
+
+  Certificate:
+    Type: String
+    Default: 
+  Image:
+    Type: String
+    Default: 
+  ServiceName:
+    Type: String
+    Default: 
+  ContainerPort:
+    Type: Number
+    Default:
+  LoadBalancerPort:
+    Type: Number
+    Default: 
+  HealthCheckPath:
+    Type: String
+    Default: 
+  HostedZoneName:
+    Type: String
+    Default: 
+  Subdomain:
+    Type: String
+    Default: 
+
+Resources:
+
+  VPC: 
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.20.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default  
+      Tags:
+        - Key: Name
+          Value: 
+
+  SubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Sub '10.20.1.0/24'
+      MapPublicIpOnLaunch: true 
+      Tags:
+        - Key: Name
+          Value: 
+
+  SubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Sub '10.20.2.0/24'
+      MapPublicIpOnLaunch: true  
+      Tags:
+        - Key: Name
+          Value:   
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway  
+
+  VPCGatewayAttachment:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC 
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC  
+      Tags:
+        - Key: Name
+          Value:  
+
+  RouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SubnetA
+      RouteTableId: !Ref RouteTable
+
+  RouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SubnetB
+      RouteTableId: !Ref RouteTable       
+
+  InternetRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: 0.0.0.0/0          
+
+  ContainerRegistry:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: 
+
+  Cluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Join ['', [!Ref ServiceName, Cluster]]
+
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    DependsOn: LogGroup
+    Properties:
+      Family: !Join ['', [!Ref ServiceName, TaskDefinition]]
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: 512
+      Memory: 1024
+      ExecutionRoleArn: !Ref ExecutionRole
+      TaskRoleArn: !Ref TaskRole
+      ContainerDefinitions:
+        - Name: !Ref ServiceName
+          Image: !Ref Image
+          Cpu: 512
+          Memory: 1024
+          PortMappings:
+            - ContainerPort: !Ref ContainerPort
+              Protocol: tcp
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-region: !Ref AWS::Region
+              awslogs-group: !Ref LogGroup
+              awslogs-stream-prefix: ecs   
+
+  ECSRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: [ecs.amazonaws.com]
+          Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+      - PolicyName: ecs-service
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+              # allow ECS to attach network interfaces to instances for awsvpc networking mode
+              - 'ec2:AttachNetworkInterface'
+              - 'ec2:CreateNetworkInterface'
+              - 'ec2:CreateNetworkInterfacePermission'
+              - 'ec2:DeleteNetworkInterface'
+              - 'ec2:DeleteNetworkInterfacePermission'
+              - 'ec2:Describe*'
+              - 'ec2:DetachNetworkInterface'
+              # allow ECS to update load balancers on your behalf
+              - 'elasticloadbalancing:DeregisterInstancesFromLoadBalancer'
+              - 'elasticloadbalancing:DeregisterTargets'
+              - 'elasticloadbalancing:Describe*'
+              - 'elasticloadbalancing:RegisterInstancesWithLoadBalancer'
+              - 'elasticloadbalancing:RegisterTargets'
+            Resource: '*'
+
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Join ['', [!Ref ServiceName, ExecutionRole]]
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - ''
+      Path: /
+      Policies:
+        - PolicyName: AmazonECSTaskExecutionRolePolicy
+          PolicyDocument:
+            Statement:
+            - Effect: Allow
+              Action:
+                # ECS Tasks to download images from ECR
+                - 'ecr:GetAuthorizationToken'
+                - 'ecr:BatchCheckLayerAvailability'
+                - 'ecr:GetDownloadUrlForLayer'
+                - 'ecr:BatchGetImage'
+                # ECS tasks to upload logs to CloudWatch
+                - 'logs:CreateLogStream'
+                - 'logs:PutLogEvents'
+              Resource: '*'
+
+  # A role for the containers
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Join ['', [!Ref ServiceName, TaskRole]]
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: 'sts:AssumeRole'
+      # ManagedPolicyArns:
+      #   -
+      # Policies:
+      #   -           
+
+  ContainerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Join ['', [!Ref ServiceName, ContainerSecurityGroup]]
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: !Ref ContainerPort
+          ToPort: !Ref ContainerPort
+          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+
+  LoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Join ['', [!Ref ServiceName, LoadBalancerSecurityGroup]]
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: !Ref LoadBalancerPort
+          ToPort: !Ref LoadBalancerPort
+          CidrIp: 0.0.0.0/0        
+
+  Service:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - ListenerHTTPS
+    Properties: 
+      ServiceName: !Ref ServiceName
+      Cluster: !Ref Cluster
+      TaskDefinition: !Ref TaskDefinition
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 70
+        MaximumPercent: 200
+      DesiredCount: 2
+      HealthCheckGracePeriodSeconds: 300
+      LaunchType: FARGATE
+      NetworkConfiguration: 
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets:
+            - !Ref SubnetA
+            - !Ref SubnetB
+          SecurityGroups:
+            - !Ref ContainerSecurityGroup
+      LoadBalancers:
+        - ContainerName: !Ref ServiceName
+          ContainerPort: !Ref ContainerPort
+          TargetGroupArn: !Ref TargetGroup          
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: !Ref HealthCheckPath
+      HealthCheckTimeoutSeconds: 5
+      UnhealthyThresholdCount: 5
+      HealthyThresholdCount: 2
+      Name: !Join ['', [!Ref ServiceName, TargetGroup]]
+      Port: !Ref ContainerPort
+      HealthCheckProtocol: HTTP
+      Protocol: HTTP
+      HealthCheckPath: /signin
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: 60 
+      TargetType: ip
+      VpcId: !Ref VPC 
+
+  ListenerHTTPS:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    DependsOn: LoadBalancer
+    Properties:
+      DefaultActions:
+        - TargetGroupArn: !Ref TargetGroup
+          Type: forward
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: !Ref LoadBalancerPort
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref Certificate
+
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: 60
+      Name: !Join ['', [!Ref ServiceName, LoadBalancer]]
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref LoadBalancerSecurityGroup
+      Subnets:
+        - !Ref SubnetA
+        - !Ref SubnetB
+
+  ListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref ListenerHTTPS
+      Priority: 2
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /signin*
+      Actions:
+        - TargetGroupArn: !Ref TargetGroup
+          Type: forward        
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Join ['', [/ecs/, !Ref ServiceName, TaskDefinition]]
