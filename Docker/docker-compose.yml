@@ -1,0 +1,59 @@
+version: '3'
+
+services:
+  dashboardapp:
+    image: 
+    container_name: 
+    restart: on-failure
+    ports:
+      - 
+    environment:
+      ASPNETCORE_ENVIRONMENT: 
+      ASPNETCORE_URLS: ""
+      ASPNETCORE_FORWARDEDHEADERS_ENABLED: ""
+      TRANDER_DB_SERVER: ${TRANDER_DB_SERVER}
+      TRANDER_DB_NAME: ${TRANDER_DB_NAME}
+      TRANDER_DB_USER: ${TRANDER_DB_USER}
+      TRANDER_DB_PASSWORD: ${TRANDER_DB_PASSWORD}
+      TRANDER_DB_MARS: ${TRANDER_DB_MARS}
+    depends_on:
+      - keycloak
+    network_mode: bridge
+
+  keycloak:
+    image: jboss/keycloak:8.0.2
+    container_name: keycloak
+    restart: always
+    ports:
+      - 
+      - 
+    environment:
+      DB_ADDR: ${DB_ADDR}
+      DB_DATABASE: ${DB_DATABASE}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JDBC_PARAMS: ${JDBC_PARAMS}
+      KEYCLOAK_HOSTNAME: 
+      KEYCLOAK_HTTP_PORT: 
+      KEYCLOAK_USER: 
+      KEYCLOAK_PASSWORD: ${KEYCLOAK_PASSWORD}
+      PROXY_ADDRESS_FORWARDING: ""
+      KEYCLOAK_WELCOME_THEME: ""
+    command: -Dkeycloak.profile.feature.upload_scripts=enabled
+    volumes:
+      - ~
+      - ~
+    network_mode: bridge
+
+  worker:
+    image: 
+    container_name: 
+    restart: on-failure
+    environment:
+      DOTNET_ENVIRONMENT: 
+    depends_on:
+      - dashboardapp
+    network_mode: bridge
+
+volumes:
+  data:

@@ -1,0 +1,246 @@
+Description: CloudFormation templatef for
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+
+  GitHubOAuthToken:
+    Type: String
+#    Default: Must provide through parameters 
+    NoEcho: true
+    MinLength: 40
+    MaxLength: 40
+    AllowedPattern: '[a-z0-9]*'
+
+  GitHubOwner:
+    Type: String
+#    Default: Must provide through parameters 
+    AllowedPattern: "[A-Za-z0-9-]+"
+
+  GitHubRepo:
+    Type: String
+#    Default: Must provide through parameters 
+    AllowedPattern: "[A-Za-z0-9-]+"
+
+  GitHubBranch:
+    Type: String
+    Default: 
+    AllowedPattern: "[A-Za-z0-9-]+"
+
+  ApplicationStackName:
+    Type: String
+    Default: 
+    AllowedPattern: "[A-Za-z0-9-]+"
+
+Resources:
+  nodeApplication:
+    Type: AWS::ElasticBeanstalk::Application
+    Properties:
+      Description: AWS Elastic Beanstalk Application
+
+  nodeConfigurationTemplate:
+    Type: AWS::ElasticBeanstalk::ConfigurationTemplate
+    Properties:
+      ApplicationName:
+        Ref: nodeApplication
+      Description: AWS ElasticBeanstalk Configuration Template      
+      SolutionStackName: 64bit Amazon Linux 2 v5.2.4 running Node.js 12
+      OptionSettings:
+      - Namespace: aws:autoscaling:launchconfiguration
+        OptionName: InstanceType
+        Value:
+      - Namespace: aws:autoscaling:launchconfiguration
+        OptionName: SSHSourceRestriction
+        Value: 
+      - Namespace: aws:autoscaling:launchconfiguration
+        OptionName: IamInstanceProfile
+        Value:      
+      - Namespace: aws:autoscaling:asg
+        OptionName: MinSize
+        Value:
+      - Namespace: aws:autoscaling:asg
+        OptionName: MaxSize
+        Value:
+      - Namespace: aws:elasticbeanstalk:environment
+        OptionName: EnvironmentType
+        Value: 
+      - Namespace: aws:elasticbeanstalk:application:environment
+        OptionName: 
+        Value: # Must provide env variable
+      - Namespace: aws:elasticbeanstalk:application:environment
+        OptionName: NODE_ENV
+        Value: 
+      - Namespace: aws:elasticbeanstalk:application:environment
+        OptionName: PORT
+        Value: 
+      - Namespace: aws:elasticbeanstalk:application:environment
+        OptionName: SCOPES
+        Value: 
+      - Namespace: aws:elasticbeanstalk:application:environment
+        OptionName: TUNNEL_URL
+        Value: # Must provide env variable  
+
+  nodeEnvironment:
+    Type: AWS::ElasticBeanstalk::Environment
+    DependsOn:
+    - nodeApplication
+    - nodeConfigurationTemplate
+    Properties:
+      ApplicationName:
+        Ref: nodeApplication
+      Description: AWS ElasticBeanstalk Node Environment
+      TemplateName:
+        Ref: nodeConfigurationTemplate
+
+  CodePipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - codepipeline.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess    
+      Path: "/"
+      Policies:
+      - PolicyName: codepipeline-service
+        PolicyDocument:
+          Statement:
+          - Action:
+            - s3:GetObject
+            - s3:GetObjectVersion
+            - s3:GetBucketVersioning
+            Resource: "*"
+            Effect: Allow
+          - Action:
+            - s3:PutObject
+            Resource:
+            - arn:aws:s3:::codepipeline*
+            - arn:aws:s3:::elasticbeanstalk*
+            Effect: Allow
+          - Action:
+            - codedeploy:CreateDeployment
+            - codedeploy:GetApplicationRevision
+            - codedeploy:GetDeployment
+            - codedeploy:GetDeploymentConfig
+            - codedeploy:RegisterApplicationRevision
+            Resource: "*"
+            Effect: Allow
+          - Action:
+            - elasticbeanstalk:*
+            - ec2:*
+            - elasticloadbalancing:*
+            - autoscaling:*
+            - cloudwatch:*
+            - s3:*
+            - sns:*
+            - cloudformation:*
+            - sqs:*
+            - iam:PassRole
+            Resource: "*"
+            Effect: Allow
+
+  ArtifactBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      VersioningConfiguration:
+        Status: Enabled
+
+  CodePipelineStack:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      RestartExecutionOnUpdate: true
+      RoleArn: !GetAtt CodePipelineRole.Arn
+      Stages:
+      - Name: Source
+        Actions:
+        - Name: Source
+          InputArtifacts: []
+          ActionTypeId:
+            Category: Source
+            Owner: ThirdParty
+            Version: 1
+            Provider: 
+          OutputArtifacts:
+          - Name: 
+          Configuration:
+            Owner: !Ref GitHubOwner
+            Repo: !Ref GitHubRepo
+            Branch: !Ref GitHubBranch
+            PollForSourceChanges: false
+            OAuthToken: !Ref GitHubOAuthToken
+          RunOrder: 1
+      - Name: Deploy
+        Actions:          
+        - Name: Deploy
+          InputArtifacts:
+          - Name: 
+          ActionTypeId:
+            Category: Deploy
+            Owner: AWS
+            Version: '1'
+            Provider: ElasticBeanstalk
+          OutputArtifacts: []
+          Configuration:
+            ApplicationName:
+              Ref: nodeApplication
+            EnvironmentName:
+              Ref: nodeEnvironment
+          RunOrder: 1          
+      ArtifactStore:
+        Type: S3
+        Location: !Ref ArtifactBucket
+
+  GithubWebhook:
+    Type: AWS::CodePipeline::Webhook
+    Properties:
+      Authentication: GITHUB_HMAC
+      AuthenticationConfiguration:
+        SecretToken: !Ref GitHubOAuthToken
+      RegisterWithThirdParty: 'true'
+      Filters:
+      - JsonPath: "$.ref"
+        MatchEquals: refs/heads/{Branch}
+      TargetPipeline: !Ref CodePipelineStack
+      TargetAction: Source
+      TargetPipelineVersion: !GetAtt CodePipelineStack.Version        
+
+Outputs:
+  AppURL:
+    Value:
+      Fn::Join:
+      - ''
+      - - http://
+        - Fn::GetAtt:
+          - nodeEnvironment
+          - EndpointURL
+        - "/"
+    Description: URL for the working Node application
+  CodePipelineURL:
+    Value:
+      Fn::Join:
+      - ''
+      - - https://console.aws.amazon.com/codepipeline/home?region=
+        - Ref: AWS::Region
+        - "#/view/"
+        - Ref: CodePipelineStack
+    Description: Pipeline URL
+  nodeApplication:
+    Value:
+      Ref: nodeApplication
+  nodeConfigurationTemplate:
+    Value:
+      Ref: nodeConfigurationTemplate
+    Description: The Elastic Beanstalk configuration
+  nodeEnvironment:
+    Value:
+      Ref: nodeEnvironment
+    Description: The Elastic Beanstalk environment on which the application runs
+  CodePipelineRole:
+    Value:
+      Ref: CodePipelineRole
+    Description: The IAM role associated with CodePipeline pipeline

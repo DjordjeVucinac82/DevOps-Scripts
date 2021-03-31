@@ -1,0 +1,10 @@
+stages:
+  - build
+
+build:
+  stage: build
+  script:
+    - chmod u+x ./Deploy/staging/deployStaging.sh
+    - ./Deploy/staging/deployStaging.sh
+  only:
+    - staging
