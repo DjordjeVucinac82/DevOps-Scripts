@@ -207,7 +207,7 @@ Resources:
         MatchEquals: refs/heads/{Branch}
       TargetPipeline: !Ref CodePipelineStack
       TargetAction: Source
-      TargetPipelineVersion: !GetAtt CodePipelineStack.Version        
+      TargetPipelineVersion: !GetAtt CodePipelineStack.Version
 
 Outputs:
   AppURL:

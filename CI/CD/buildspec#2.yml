@@ -1,0 +1,51 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - cd $CODEBUILD_SRC_DIR
+      - touch .env
+      - echo "API_ROOT=$API_ROOT" >> .env
+      - ...
+      - echo Logging in to Amazon ECR...
+      - aws --version
+      - pip install --upgrade awscli==1.18.17
+      - $(aws ecr get-login --no-include-email --region )
+      - REPOSITORY_URI=
+      - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+      - IMAGE_TAG=build-$(echo $CODEBUILD_BUILD_ID | awk -F":" '{print $2}')
+      - TASK_FAMILY=
+      - TASK_EXECUTION_ARN=
+      - AWS_REGION=
+  build:
+    commands:
+      - echo Build started on 'date'
+      - echo Building the Docker image...
+      - docker build -t $REPOSITORY_URI:latest .
+      - docker tag $REPOSITORY_URI:latest $REPOSITORY_URI:$IMAGE_TAG
+  post_build:
+    commands:
+      - echo Build complete on 'date'
+      - echo Pushing Docker images...
+      - docker push $REPOSITORY_URI:latest
+      - docker push $REPOSITORY_URI:$IMAGE_TAG
+      - echo Update the REPOSITORY_URI:IMAGE_TAG in task definition...
+      - echo Container image to be used $REPOSITORY_URI:$IMAGE_TAG
+      - sed -i 's@REPOSITORY_URI@'$REPOSITORY_URI'@g' taskdef.json
+      - sed -i 's@IMAGE_TAG@'$IMAGE_TAG'@g' taskdef.json
+      - echo update the REGION in task definition...
+      - sed -i 's@AWS_REGION@'$AWS_REGION'@g' taskdef.json
+      - echo update the roles in task definition...
+      - sed -i 's@TASK_EXECUTION_ARN@'$TASK_EXECUTION_ARN'@g' taskdef.json
+      - echo update the task family name in task definition...
+      - sed -i 's@TASK_FAMILY@'$TASK_FAMILY'@g' taskdef.json
+      - echo update the container name in appspec.yaml...
+      - sed -i 's@TASK_FAMILY@'$TASK_FAMILY'@g' appspec.yml      
+      - echo Writting image definitions files...
+      - printf '[{"name":"dev-mailo-app","imageUri":"%s"}]' $REPOSITORY_URI:$IMAGE_TAG > imageDetail.json
+      - cat imageDetail.json
+artifacts:
+    files: 
+      - appspec.yml
+      - taskdef.json
+      - imageDetail.json
