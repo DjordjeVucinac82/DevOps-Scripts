@@ -465,7 +465,7 @@ Resources:
           DB_HOSTNAME: !GetAtt MyDB.Endpoint.Address
           DB_PORT: !GetAtt MyDB.Endpoint.Port
           DB_SCHEMA: !Ref DBName
-          S3_BUCKET: html.storage
+          S3_BUCKET: 
                   
   SaveExternalImageFunction:
     Type: AWS::Serverless::Function

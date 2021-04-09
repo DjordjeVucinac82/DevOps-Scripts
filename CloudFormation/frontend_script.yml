@@ -276,7 +276,7 @@ Resources:
       Port: !Ref ContainerPort
       HealthCheckProtocol: HTTP
       Protocol: HTTP
-      HealthCheckPath: /signin
+      HealthCheckPath: 
       TargetGroupAttributes:
         - Key: deregistration_delay.timeout_seconds
           Value: 60 
@@ -318,7 +318,7 @@ Resources:
       Conditions:
         - Field: path-pattern
           Values:
-            - /signin*
+            - /*
       Actions:
         - TargetGroupArn: !Ref TargetGroup
           Type: forward        
