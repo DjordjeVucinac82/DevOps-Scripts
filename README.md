@@ -1,5 +1,5 @@
-# DevOps-Scripts
+## DevOps-Scripts
 
-    by Djordje Vucinac, DevOps engineer at Noubis
+    `by Djordje Vucinac, DevOps engineer at Noubis`
 
 [noubis.com](https://noubis.com)
