@@ -1,5 +1,5 @@
 ---
-- name: Clone Vitagis.life Gitlab repository
+- name: Clone Gitlab repository
   hosts: test
   become: true
   vars_files: ./vars/main.yml
