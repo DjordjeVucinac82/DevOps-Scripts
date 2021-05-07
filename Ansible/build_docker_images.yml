@@ -89,7 +89,7 @@
         name: worker
         image: 
         state: started
-        # network_mode: vitagis        
+        # network_mode: vitagis       
         env:
           DOTNET_ENVIRONMENT: 
 
