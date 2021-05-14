@@ -1,0 +1,41 @@
+name: Deploy  Server Application
+
+on:
+  push:
+    branches: [ dev ]
+
+jobs:
+  build:
+
+    runs-on: self-hosted
+    # defaults: 
+    #   run:
+    #     working-directory: /home/noubis/PuffyWeed-Server
+
+    strategy:
+      matrix:
+        node-version: [12.x]
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v2
+      with:
+        node-version: ${{ matrix.node-version }}
+    
+    - run: pm2 stop ecosystem.config.js
+    - run: npm install
+    - run: npm run-script build
+    # - run: pm2 start dist/main.js --name=backendAPI
+    # - run: pm2 restart backendAPI --update-env
+    - run: pm2 start ecosystem.config.js
+
+      env:
+        DATABASE_TYPE: ${{secrets.DATABASE_TYPE}}
+        POSTGRES_DB: ${{secrets.POSTGRES_DB}}
+        POSTGRES_HOST: ${{secrets.POSTGRES_HOST}}
+        POSTGRES_PASSWORD: ${{secrets.POSTGRES_PASSWORD}}
+        POSTGRES_PORT: ${{secrets.POSTGRES_PORT}}
+        POSTGRES_USER: ${{secrets.POSTGRES_USER}}
+        SYNC_DB: ${{secrets.SYNC_DB}}
