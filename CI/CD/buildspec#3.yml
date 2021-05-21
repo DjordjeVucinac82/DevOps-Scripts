@@ -16,7 +16,7 @@ phases:
       - echo Build started on `date`
       - npm run build-dev
   post_build:
-     commands:
+      commands:
       - aws s3 cp dist s3://${S3_BUCKET} --recursive
       - echo Build completed on `date`
 artifacts:
