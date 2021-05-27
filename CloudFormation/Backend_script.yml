@@ -102,23 +102,23 @@ Parameters:
   Auth0AppClientSecret:
     Type: String
     Default: 
-       
+
   Auth0Domain:
     Type: String
     Default:
-           
+    
   Auth0ManagementAudience:
     Type: String
     Default:
-           
+      
   Auth0ManagementClientId:
     Type: String
     Default:
-           
+      
   Auth0ManagementClientSecret:   
     Type: String
     Default: 
-         
+    
 Resources:
   VPC:
     Type: AWS::EC2::VPC
