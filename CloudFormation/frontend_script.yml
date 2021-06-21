@@ -76,7 +76,7 @@ Resources:
   RouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref VPC  
+      VpcId: !Ref VPC
       Tags:
         - Key: Name
           Value:  
@@ -91,7 +91,7 @@ Resources:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref SubnetB
-      RouteTableId: !Ref RouteTable       
+      RouteTableId: !Ref RouteTable
 
   InternetRoute:
     Type: AWS::EC2::Route
