@@ -1,0 +1,21 @@
+FROM node:12
+
+RUN mkdir -p /home/node/app/node_modules && chown -R node:node /home/node/app
+WORKDIR /home/node/app
+
+EXPOSE 3000
+USER node
+COPY package*.json ./
+
+RUN npm install yarn
+RUN npm i @nestjs/cli
+RUN yarn install
+RUN yarn add typeorm
+RUN yarn add bcrypt
+RUN yarn add password-validator
+
+COPY --chown=node:node . .
+
+RUN yarn build
+
+CMD [ "yarn", "start" ]
