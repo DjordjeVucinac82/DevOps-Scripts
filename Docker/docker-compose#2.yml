@@ -91,7 +91,7 @@ services:
     # networks:
     #   - vitagis
 
-  tranderworker:
+  worker:
     image: 
     container_name: 
     restart: on-failure

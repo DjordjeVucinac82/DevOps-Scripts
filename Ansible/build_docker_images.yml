@@ -69,11 +69,11 @@
           ASPNETCORE_ENVIRONMENT: 
           ASPNETCORE_URLS: 
           ASPNETCORE_FORWARDEDHEADERS_ENABLED: 
-          TRANDER_DB_SERVER: 
-          TRANDER_DB_NAME: 
-          TRANDER_DB_USER: 
-          TRANDER_DB_PASSWORD: 
-          TRANDER_DB_MARS: 
+          DB_SERVER: 
+          DB_NAME: 
+          DB_USER: 
+          DB_PASSWORD: 
+          DB_MARS: 
 
 #          ASPNETCORE_Kestrel__Certificates__Default__Password: ""
 #          ASPNETCORE_Kestrel__Certificates__Default__Path: ""
