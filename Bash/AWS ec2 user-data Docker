@@ -33,7 +33,13 @@ yum install -y git
 curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m) -o /usr/local/bin/docker-compose
 chmod +x /usr/local/bin/docker-compose
 
-
+#27.01.2022 linux 2 AMI versions ref to above lines
+#[ec2-user@ip-172-31-28-0 ~]$ docker -v
+#Docker version 20.10.7, build f0df350
+#[ec2-user@ip-172-31-28-0 ~]$ docker-compose version
+#Docker Compose version v2.2.3
+#[ec2-user@ip-172-31-28-0 ~]$ git --version
+#git version 2.32.0
 
 sudo yum -y install docker; \
  sudo service docker start; \
