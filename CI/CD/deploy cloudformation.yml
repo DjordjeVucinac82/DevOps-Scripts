@@ -1,0 +1,61 @@
+name: 'Deploy to AWS CloudFormation'
+
+on: 
+  push:
+    branches: [ master ]  
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  # This workflow contains a single job called "deploy"
+  deploy:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+    # defaults:
+    #   run:
+    #     working-directory: ./sam-app
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - name: Checkout code from master branch
+        uses: actions/checkout@v2
+
+      - name: Install python 3.8
+        uses: actions/setup-python@v2
+        with:
+          python-version: "3.8"  
+
+      - name: Setup AWS sam cli
+        uses: aws-actions/setup-sam@v1
+
+      # Configure AWS Credential
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.ACCESS_KEY_SECRET }}
+          aws-region: eu-central-1
+      
+      # Deploy to AWS CloudFormation
+      # - name: Deploy to AWS CloudFormation
+      #   uses: aws-actions/aws-cloudformation-github-deploy@v1
+      #   with:
+      #     name: backend-v2
+      #     # working-directory: /home/runner/work/platform/sam-app
+      #     template: ./sam-app/template.yaml
+      #     no-fail-on-empty-changeset: "1"
+          
+      - name: Run AWS sam build
+        run:  sam build --template-file ./sam-app/template.yaml #--use-container 
+        
+      - name: Run AWS sam deploy
+        run: |
+          sam deploy --force-upload \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --stack-name backend-v2 \
+            --s3-bucket backendv2 \
+            --capabilities CAPABILITY_IAM \
+            --region eu-central-1 \
+            --template-file ./sam-app/template.yaml \
