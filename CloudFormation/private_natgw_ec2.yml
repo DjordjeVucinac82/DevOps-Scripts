@@ -1,0 +1,214 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation Template with
+              NATGW, public and private subnet, eIP, SG, ec2 with docker and docker-compose
+
+# Parameters:
+#   AvailabilityZone:
+#     Type: String
+#     Default: 'eu-central-1a'
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: 
+
+  SubnetAPublic:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: 'eu-central-1a'
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: Public
+
+  SubnetBPrivate:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: 'eu-central-1b'
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: Private        
+          
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    DependsOn: VPC
+    Properties:
+      Tags:
+        - Key: Name
+          Value: igw
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+      
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: Public
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: Private     
+
+  PublicRoute1:             
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PrivateRoute1:             
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway  
+
+  SubnetAPublicRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SubnetAPublic
+      RouteTableId: !Ref PublicRouteTable
+
+  SubnetBPrivateRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SubnetBPrivate
+      RouteTableId: !Ref PrivateRouteTable
+
+  NATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATElasticIPAddress.AllocationId
+      SubnetId: !Ref SubnetAPublic
+      Tags:
+        - Key: Name
+          Value: natgw
+
+  NATElasticIPAddress:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: VPC
+      Tags:
+        - Key: Name
+          Value: NATeIP
+
+  EC2ElasticIPAddress:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: VPC
+      Tags:
+        - Key: Name
+          Value: EC2eIP 
+
+  AssociateEC2:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt EC2ElasticIPAddress.AllocationId
+      NetworkInterfaceId: !Ref EC2NIC
+
+  EC2NIC:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      SubnetId: !Ref SubnetAPublic
+      Description: Interface for EC2
+      GroupSet: 
+      - !Ref SecurityGroup
+      SourceDestCheck: true
+      Tags:
+      - Key: Network
+        Value: ec2nic
+
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable SSH, HTTP and HTTPS and other port for application, if needed!
+      VpcId: !Ref VPC
+      Tags: 
+        - Key: Name
+          Value: SG
+      SecurityGroupIngress: 
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        # - IpProtocol: tcp
+        #   FromPort: 5432
+        #   ToPort: 5432
+        #   CidrIp: 0.0.0.0/0
+        # Allow to ping server
+        # - IpProtocol: icmp
+        #   FromPort: -1
+        #   ToPort: -1
+        #   CidrIp: 0.0.0.0/0   
+
+  ec2:
+    Type: AWS::EC2::Instance
+    Properties:
+      AvailabilityZone: 'eu-central-1a'
+      # SubnetId: !Ref SubnetAPublic
+      ImageId: ami-0d527b8c289b4af7f  #Ubuntu 20.04 eu-central-1
+      InstanceType: t2.micro
+      # Need to set key .pem format and ref 
+      KeyName: 
+      NetworkInterfaces:
+      - NetworkInterfaceId: !Ref EC2NIC
+        DeviceIndex: 0
+      BlockDeviceMappings:
+        - DeviceName: '/dev/sda1'
+          Ebs:
+            VolumeSize: 20 # in GB
+            VolumeType: gp2
+      # SecurityGroupIds: 
+      #   - !Ref SecurityGroup
+      UserData:
+        Fn::Base64: 
+          !Sub |
+            #!/bin/bash  
+            # Install Docker
+            apt-get update
+            apt-get install -y apt-transport-https ca-certificates curl software-properties-common
+            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+            add-apt-repository \
+              "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
+              $(lsb_release -cs) \
+              stable"
+            apt-get update
+            apt-get install -y docker-ce
+            usermod -aG docker ubuntu
+            # Install docker-compose
+            curl -L https://github.com/docker/compose/releases/download/1.21.0/docker-compose-$(uname -s)-$(uname -m) -o /usr/local/bin/docker-compose
+            chmod +x /usr/local/bin/docker-compose
+      Tags:
+        - Key: Name
+          Value: EC2
