@@ -10,6 +10,7 @@
 
 data "http" "workstation-external-ip" {
   url = "http://ipv4.icanhazip.com"
+  #url = "178.222.246.62"
 }
 
 # Override with variable or hardcoded value if necessary
