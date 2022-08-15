@@ -1,7 +1,9 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: CloudFormation Template with
-              NATGW, public and private subnet, eIP, SG, ec2 with docker and docker-compose
-
+Description: >
+              CloudFormation Template with
+                NATGW, public and private subnet, eIP, SG, ec2 Ubuntu 20 with docker and docker-compose
+                  AWS region eu-central-1 
+              
 # Parameters:
 #   AvailabilityZone:
 #     Type: String
