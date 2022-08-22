@@ -1,0 +1,112 @@
+version: '3.3'
+
+services: 
+  backend:
+    build:
+      context: ./backend/
+    container_name: 'backend'
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    env_file: .env
+    environment:
+      APP_NAME: 'backend'
+      DATABASE_CLIENT: 'postgres'
+      DATABASE_HOST: $DATABASE_HOST
+      DATABASE_PORT: $DATABASE_PORT
+      DATABASE_NAME: $DATABASE_NAME
+      DATABASE_USERNAME: $DATABASE_USERNAME
+      DATABASE_PASSWORD: $DATABASE_PASSWORD
+      JWT_SECRET: $JWT_SECRET
+      ADMIN_JWT_SECRET: $ADMIN_JWT_SECRET
+      NODE_ENV: $NODE_ENV
+    volumes:
+      - ./backend/config:/opt/app/config
+      - ./backend/src:/opt/app/src
+      - ./backend/package.json:/opt/app/package.json
+      - ./backend/yarn.lock:/opt/app/yarn.lock
+      - ./.env:/opt/app/.env
+    # ports:
+    #   - 1337:1337
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.backend.rule=Host(`api.${DOMAIN}`)'
+      - 'traefik.http.routers.backend.entrypoints=https'
+      - 'traefik.http.routers.backend.tls.certresolver=${CERT_RESOLVER}'
+
+  postgres:
+    image: postgres:14.4
+    container_name: 'db'
+    restart: always
+    environment:
+      POSTGRES_USER: $DATABASE_USERNAME
+      POSTGRES_PASSWORD: $DATABASE_PASSWORD
+      POSTGRES_DB: $DATABASE_NAME
+    volumes:
+      - ./pg-data:/var/lib/postgresql/data
+    # ports:
+    #   - 5432:5432
+
+  backup:
+    build:
+      context: ./database-backup/
+    container_name: 'backup'
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    environment:
+      SESSION_SECRET: $SESSION_SECRET
+      COOKIE_DOMAIN: $DOMAIN
+      USERNAME: $USERNAME 
+      PASSWORD: $PASSWORD
+      BACKUP_PATH: $BACKUP_PATH
+      CRON_PATTERN: $CRON_PATTERN
+      CRON_COMMAND: $CRON_COMMAND
+    volumes:
+      - ./backup:$BACKUP_PATH
+    # ports:
+    #   - 3000:3000
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.backup.rule=Host(`backup.${DOMAIN}`)'
+      - 'traefik.http.routers.backup.entrypoints=https'
+      - 'traefik.http.routers.backup.tls.certresolver=${CERT_RESOLVER}'
+
+  frontend:
+    build:
+      context: ./frontend/
+    container_name: 'frontend'
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.frontend.rule=Host(`${DOMAIN}`) || Host(`www.${DOMAIN}`)'
+      - 'traefik.http.routers.frontend.entrypoints=https'
+      - 'traefik.http.routers.frontend.tls.certresolver=${CERT_RESOLVER}'
+      - 'treafik.http.middlewares.frontend-redirect.redirectregex.regex=^(https?://)www.(.*)$$'
+      - 'traefik.http.middlewares.frontend-redirect.redirectregex.replacement=$${1}$${2}'
+      - 'traefik.http.routers.frontend.middlewares=frontend-redirect'
+
+  traefik:
+    image: traefik:v2.8
+    container_name: 'traefik'
+    command:
+      - '--api.insecure=true'
+      - '--providers.docker=true'
+      
+      - '--entrypoints.http.address=:80' 
+      - '--entrypoints.https.address=:443'
+      - '--providers.docker.exposedbydefault=false'
+     
+      - '--certificatesresolvers.letsencrypt.acme.tlschallenge=true'
+      - '--certificatesresolvers.letsencrypt.acme.email=${EMAIL}'
+      - '--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json'
+
+      # Redirect to HTTPS
+      - '--entrypoints.http.http.redirections.entrypoint.to=https'
+      - '--entrypoints.http.http.redirections.entrypoint.scheme=https'
+      # - '--certificatesresolvers.letsencrypt.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory'
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - './letsencrypt:/letsencrypt'
+      - '/var/run/docker.sock:/var/run/docker.sock:ro'
